@@ -48,6 +48,9 @@ class DiameterAsync:
 
                 # SLh LCS
                 {"commandCode": 8388622, "applicationId": 16777291, "responseMethod": self.Answer_16777291_8388622, "failureResultCode": 4100 ,"requestAcronym": "LRR", "responseAcronym": "LRA", "requestName": "LCS Routing Info Request", "responseName": "LCS Routing Info Answer"},
+
+                # SWx
+                {"commandCode": 303, "applicationId": 16777265, "responseMethod": self.Answer_16777265_303, "failureResultCode": 4100 ,"requestAcronym": "MAR", "responseAcronym": "MAA", "requestName": "Multimedia Authentication Request", "responseName": "Multimedia Authentication Answer"},
             ]
 
         self.redisUseUnixSocket = config.get('redis', {}).get('useUnixSocket', False)
@@ -454,6 +457,11 @@ class DiameterAsync:
         pass
 
     async def Answer_16777291_8388622(self):
+        pass
+
+    async def Answer_16777265_303(self):
+        # SWx Multimedia Authentication Answer (MAA)
+        # Async stub - implementation delegated to sync Diameter class
         pass
 
     async def Answer_16777236_265(self):

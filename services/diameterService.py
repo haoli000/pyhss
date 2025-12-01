@@ -290,7 +290,7 @@ class DiameterService:
                         break
 
                 if messageList:
-                    await self.redisReaderMessaging.sendBulkMessage(queue=inboundQueueName, messageList=messageList, queueExpiry=self.diameterRequestTimeout, usePrefix=True, prefixHostname=self.hostname, prefixServiceName='diameter')
+                    await self.redisReaderMessaging.sendBulkMessage(queue=inboundQueueName, messageList=messageList, queueExpiry=self.diameterRequestTimeout, usePrefix=False)
                     messageList = []
 
             except Exception as e:
@@ -305,7 +305,7 @@ class DiameterService:
         while not writer.transport.is_closing():
             try:
                 await(self.logTool.logAsync(service='Diameter', level='debug', message=f"[Diameter] [writeOutboundData] [{coroutineUuid}] Waiting for messages for host {clientAddress} on port {clientPort}"))
-                pendingOutboundMessage = (await(self.redisWriterMessaging.awaitMessage(key=f"diameter-outbound-{clientAddress}-{clientPort}", usePrefix=True, prefixHostname=self.hostname, prefixServiceName='diameter')))[1]
+                pendingOutboundMessage = (await(self.redisWriterMessaging.awaitMessage(key=f"diameter-outbound-{clientAddress}-{clientPort}", usePrefix=False)))[1]
                 outboundData = OutboundData.model_validate(pydantic_core.from_json(pendingOutboundMessage))
                 diameterOutboundBinary = bytes.fromhex(outboundData.OutboundHex)
                 await(self.logTool.logAsync(service='Diameter', level='debug', message=f"[Diameter] [writeOutboundData] [{coroutineUuid}] Sending: {diameterOutboundBinary.hex()} to to {clientAddress} on {clientPort}."))

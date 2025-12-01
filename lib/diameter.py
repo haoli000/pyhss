@@ -99,6 +99,9 @@ class Diameter:
 
                 # SLh LCS
                 {"commandCode": 8388622, "applicationId": 16777291, "responseMethod": self.Answer_16777291_8388622, "failureResultCode": 4100 ,"requestAcronym": "LRR", "responseAcronym": "LRA", "requestName": "LCS Routing Info Request", "responseName": "LCS Routing Info Answer"},
+
+                # SWx
+                {"commandCode": 303, "applicationId": 16777265, "responseMethod": self.Answer_16777265_303, "failureResultCode": 4100 ,"requestAcronym": "MAR", "responseAcronym": "MAA", "requestName": "Multimedia Authentication Request", "responseName": "Multimedia Authentication Answer"},
             ]
 
         self.diameterRequestList = [
@@ -4354,6 +4357,127 @@ class Diameter:
         avp += self.generate_avp(268, 40, self.int_to_hex(result_code, 4))                                                  #Result Code - DIAMETER_SUCCESS
 
         response = self.generate_diameter_packet("01", "40", 8388622, 16777291, packet_vars['hop-by-hop-identifier'], packet_vars['end-to-end-identifier'], avp)     #Generate Diameter packet
+        return response
+
+    # SWx Multimedia Authentication Answer (MAA)
+    def Answer_16777265_303(self, packet_vars, avps):
+        """
+        SWx Multimedia Authentication Answer (MAA) - Application ID 16777265, Command Code 303
+        Handles MAR requests from P-CSCFs for multimedia authentication vectors
+        """
+        avp = ''
+        
+        try:
+            session_id = self.get_avp_data(avps, 263)
+            if session_id:
+                avp += self.generate_avp(263, 40, session_id[0])                                                    #Get Session-ID
+        except Exception as e:
+            self.logTool.log(service='HSS', level='error', message=f"[SWx] Failed to get Session-ID: {e}", redisClient=self.redisMessaging)
+        
+        avp += self.generate_avp(264, 40, self.OriginHost)                                               #Origin Host
+        avp += self.generate_avp(296, 40, self.OriginRealm)                                              #Origin Realm
+        avp += self.generate_avp(277, 40, "00000001")                                                    #Auth-Session-State
+
+        try:
+            # Extract IMSI from User-Name AVP (AVP code 1)
+            username = self.get_avp_data(avps, 1)
+            if not username:
+                raise Exception("User-Name AVP not found")
+            
+            username = binascii.unhexlify(username[0]).decode('utf-8')
+            imsi = username.split('@')[0]  # Strip domain
+            domain = username.split('@')[1] if '@' in username else ""
+            
+            self.logTool.log(service='HSS', level='debug', message=f"[SWx] [Answer_16777265_303] Processing MAR for IMSI: {imsi}", redisClient=self.redisMessaging)
+            
+            # Get subscriber details
+            subscriber_details = self.database.Get_Subscriber(imsi=imsi)
+            if not subscriber_details:
+                raise Exception(f"Subscriber {imsi} not found")
+            
+            # Import SWx module for vector generation
+            from swx import SWx
+            swx_handler = SWx(self.logTool, db=self.database)
+            
+            # Generate authentication vectors (typically 1 vector for SWx)
+            num_vectors = 1
+            vectors = swx_handler.generate_swx_auth_vectors(imsi, num_vectors)
+            
+            if not vectors or len(vectors) == 0:
+                raise Exception(f"Failed to generate SWx auth vectors for {imsi}")
+            
+            vector = vectors[0]
+            
+            # Build SIP-Auth-Data-Item AVP (AVP code 612)
+            # This contains authentication material for the P-CSCF
+            auth_data_item = ''
+            
+            # Item-Number (AVP 613)
+            auth_data_item += self.generate_vendor_avp(613, "c0", 10415, format(int(0), "x").zfill(8))
+            
+            # Authentication-Scheme (AVP 608) - use Digest-AKAv1-MD5 for SWx
+            auth_data_item += self.generate_vendor_avp(608, "c0", 10415, str(binascii.hexlify(b'Digest-AKAv1-MD5'), 'ascii'))
+            
+            # SIP-Authenticate (AVP 609) - contains RAND || AUTN
+            auth_data_item += self.generate_vendor_avp(609, "c0", 10415, str(binascii.hexlify(vector['rand'] + vector['autn']), 'ascii'))
+            
+            # SIP-Authorization (AVP 610) - contains XRES
+            auth_data_item += self.generate_vendor_avp(610, "c0", 10415, str(binascii.hexlify(vector['xres']), 'ascii'))
+            
+            # Confidentiality-Key (AVP 625) - CK
+            auth_data_item += self.generate_vendor_avp(625, "c0", 10415, str(binascii.hexlify(vector['ck']), 'ascii'))
+            
+            # Integrity-Key (AVP 626) - IK
+            auth_data_item += self.generate_vendor_avp(626, "c0", 10415, str(binascii.hexlify(vector['ik']), 'ascii'))
+            
+            # Add SIP-Auth-Data-Item to response
+            avp += self.generate_vendor_avp(612, "c0", 10415, auth_data_item)
+            
+            # SIP-Number-Auth-Items (AVP 607) - number of items
+            avp += self.generate_vendor_avp(607, "c0", 10415, format(int(1), "x").zfill(8))
+            
+            # Add User-Name AVP
+            avp += self.generate_avp(1, 40, str(binascii.hexlify(str.encode(imsi + "@" + domain)), 'ascii'))
+            
+            # Add Result-Code (DIAMETER_SUCCESS = 2001)
+            avp += self.generate_avp(268, 40, self.int_to_hex(2001, 4))
+            
+            self.logTool.log(service='HSS', level='info', message=f"[SWx] [Answer_16777265_303] Successfully generated MAA for IMSI: {imsi}", redisClient=self.redisMessaging)
+            self.redisMessaging.sendMetric(serviceName='diameter', metricName='prom_diam_auth_event_count',
+                                            metricType='counter', metricAction='inc', 
+                                            metricValue=1.0, 
+                                            metricLabels={
+                                                        "diameter_application_id": 16777265,
+                                                        "diameter_cmd_code": 303,
+                                                        "event": "Success",
+                                                        "imsi_prefix": str(imsi[0:6])},
+                                            metricHelp='Diameter Authentication related Counters',
+                                            metricExpiry=60,
+                                            usePrefix=True, 
+                                            prefixHostname=self.hostname, 
+                                            prefixServiceName='metric')
+            
+        except Exception as e:
+            self.logTool.log(service='HSS', level='error', message=f"[SWx] [Answer_16777265_303] Error processing MAR: {str(e)}", redisClient=self.redisMessaging)
+            self.logTool.log(service='HSS', level='debug', message=f"[SWx] [Answer_16777265_303] Traceback: {traceback.format_exc()}", redisClient=self.redisMessaging)
+            
+            # Send error response
+            avp += self.generate_avp(268, 40, self.int_to_hex(5030, 4))  # DIAMETER_ERROR_USER_UNKNOWN
+            self.redisMessaging.sendMetric(serviceName='diameter', metricName='prom_diam_auth_event_count',
+                                            metricType='counter', metricAction='inc', 
+                                            metricValue=1.0, 
+                                            metricLabels={
+                                                        "diameter_application_id": 16777265,
+                                                        "diameter_cmd_code": 303,
+                                                        "event": "Unknown User",
+                                                        "imsi_prefix": "unknown"},
+                                            metricHelp='Diameter Authentication related Counters',
+                                            metricExpiry=60,
+                                            usePrefix=True, 
+                                            prefixHostname=self.hostname, 
+                                            prefixServiceName='metric')
+        
+        response = self.generate_diameter_packet("01", "40", 303, 16777265, packet_vars['hop-by-hop-identifier'], packet_vars['end-to-end-identifier'], avp)
         return response
         
     #### Diameter Requests ####

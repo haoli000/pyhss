@@ -394,9 +394,17 @@ class Database:
         if not database_exists(self.engine.url):
             self.logTool.log(service='Database', level='debug', message="Creating database", redisClient=self.redisMessaging)
             create_database(self.engine.url)
-            Base.metadata.create_all(self.engine)
         else:
             self.logTool.log(service='Database', level='debug', message="Database already created", redisClient=self.redisMessaging)
+
+        # Create individual tables if they do not exist (do not use create_all as it fails on existing tables)
+        inspector = inspect(self.engine)
+        for table_name in Base.metadata.tables.keys():
+            if not inspector.has_table(table_name):
+                self.logTool.log(service='Database', level='debug', message=f"Creating table {table_name}", redisClient=self.redisMessaging)
+                Base.metadata.tables[table_name].create(bind=self.engine, checkfirst=True)
+            else:
+                self.logTool.log(service='Database', level='debug', message=f"Table {table_name} already exists", redisClient=self.redisMessaging)
 
         #Load IMEI TAC database into Redis if enabled
         if self.tacDatabasePath:
@@ -405,15 +413,6 @@ class Database:
         else:
             self.logTool.log(service='Database', level='info', message="Not loading EIR IMEI TAC Database as Redis not enabled or TAC CSV Database not set in config", redisClient=self.redisMessaging)
             self.tacData = {}
-
-        # Create individual tables if they do not exist
-        inspector = inspect(self.engine)
-        for table_name in Base.metadata.tables.keys():
-            if table_name not in inspector.get_table_names():
-                self.logTool.log(service='Database', level='debug', message=f"Creating table {table_name}", redisClient=self.redisMessaging)
-                Base.metadata.tables[table_name].create(bind=self.engine)
-            else:
-                self.logTool.log(service='Database', level='debug', message=f"Table {table_name} already exists", redisClient=self.redisMessaging)
 
     def load_IMEI_database_into_Redis(self):
         try:
@@ -467,6 +466,16 @@ class Database:
                 session.close()
         except Exception as E:
             self.logTool.log(service='Database', level='error', message=f"Failed to run safe_close on session, error: {E}", redisClient=self.redisMessaging)
+
+    def ensure_tables_exist(self):
+        """Safely ensure all tables exist without failing on existing tables"""
+        try:
+            inspector = inspect(self.engine)
+            for table_name in Base.metadata.tables.keys():
+                if table_name not in inspector.get_table_names():
+                    Base.metadata.tables[table_name].create(bind=self.engine)
+        except Exception as E:
+            self.logTool.log(service='Database', level='error', message=f"Failed to ensure tables exist: {E}", redisClient=self.redisMessaging)
 
     def sqlalchemy_type_to_json_schema_type(self, sqlalchemy_type):
         """
@@ -642,7 +651,7 @@ class Database:
 
     def rollback_last_change(self, existingSession=None):
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -746,7 +755,7 @@ class Database:
 
     def rollback_change_by_operation_id(self, operation_id, existingSession=None):
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -850,7 +859,7 @@ class Database:
 
     def get_all_operation_logs(self, page=0, page_size=100, existingSession=None):
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -887,7 +896,7 @@ class Database:
 
     def get_all_operation_logs_by_table(self, table_name, page=0, page_size=100, existingSession=None):
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -924,7 +933,7 @@ class Database:
 
     def get_last_operation_log(self, existingSession=None):
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -1033,7 +1042,7 @@ class Database:
     def GetObj(self, obj_type, obj_id=None, page=None, page_size=None):
         self.logTool.log(service='Database', level='debug', message="Called GetObj for type " + str(obj_type), redisClient=self.redisMessaging)
 
-        Base.metadata.create_all(self.engine)
+        self.ensure_tables_exist()
         Session = sessionmaker(bind=self.engine)
         session = Session()
 
@@ -1079,7 +1088,7 @@ class Database:
     def GetAll(self, obj_type):
         self.logTool.log(service='Database', level='debug', message="Called GetAll for type " + str(obj_type), redisClient=self.redisMessaging)
 
-        Base.metadata.create_all(self.engine)
+        self.ensure_tables_exist()
         Session = sessionmaker(bind = self.engine)
         session = Session()
         final_result_list = []
@@ -1105,7 +1114,7 @@ class Database:
         self.logTool.log(service='Database', level='debug', message="Called getAllPaginated for type " + str(obj_type), redisClient=self.redisMessaging)
 
         if not existingSession:
-            Base.metadata.create_all(self.engine)
+            self.ensure_tables_exist()
             Session = sessionmaker(bind=self.engine)
             session = Session()
         else:
@@ -1142,7 +1151,7 @@ class Database:
     def GetAllByTable(self, obj_type, table):
         self.logTool.log(service='Database', level='debug', message=f"Called GetAll for type {str(obj_type)} and table {table}", redisClient=self.redisMessaging)
 
-        Base.metadata.create_all(self.engine)
+        self.ensure_tables_exist()
         Session = sessionmaker(bind = self.engine)
         session = Session()
         final_result_list = []
@@ -1284,12 +1293,19 @@ class Database:
         return dictty
 
     def Get_AuC(self, **kwargs):
-        #Get AuC data by IMSI or ICCID
+        #Get AuC data by IMSI, ICCID, or AUC_ID
 
         Session = sessionmaker(bind = self.engine)
         session = Session()
 
-        if 'iccid' in kwargs:
+        if 'auc_id' in kwargs:
+            self.logTool.log(service='Database', level='debug', message="Get_AuC for auc_id " + str(kwargs['auc_id']), redisClient=self.redisMessaging)
+            try:
+                result = session.query(AUC).filter_by(auc_id=int(kwargs['auc_id'])).one()
+            except Exception as E:
+                self.safe_close(session)
+                raise ValueError(E)
+        elif 'iccid' in kwargs:
             self.logTool.log(service='Database', level='debug', message="Get_AuC for iccid " + str(kwargs['iccid']), redisClient=self.redisMessaging)
             try:
                 result = session.query(AUC).filter_by(iccid=str(kwargs['iccid'])).one()

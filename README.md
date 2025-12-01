@@ -29,6 +29,7 @@ The underlying library - ``diameter.py`` can be easily worked with to add suppor
 * S6a - MME / HSS Authentication of Subscribers (Ie Authentication-Information-Request, Update-Location-Request)
 * S13 - MME to EIR verification of devices (Ie ME-Identity-Check-Request)
 * Cx - For P/S/I/E-CSCF Authentication and Routing (Ie User-Authentication-Request, Location-Information-Request)
+* SWx - Multimedia Authentication for P-CSCF (Ie Multimedia-Auth-Request/Answer)
 * SLh - For Location of Subscriber MME from GMLC (Ie LCS-Routing-Info-Answer Request)
 * Sh - For Application Servers to IMS & XCAP Data
 * Zh/Zn - For generating GBA Credentials
@@ -86,6 +87,7 @@ Each container needs a `CONTAINER_ROLE` variable as well with one of the followi
 
  - diameter
  - hss
+ - swx
  - api
  - geored
  - logs
@@ -120,6 +122,7 @@ PyHSS uses a queued microservices model. Each service performs a specific set of
 The following services make up PyHSS:
  - diameterService.py: Handles receiving and sending of diameter messages, and diameter client connection state.
  - hssService.py: Provides decoding and encoding of diameter requests and responses, as well as logic to perform as a HSS.
+ - swxService.py: Handles SWx (Multimedia Authentication) requests from P-CSCFs for IMS subscribers.
  - apiService.py: Provides the API, to allow management of PyHSS.
  - georedService.py: Sends georaphic redundancy messages to geored peers when defined. Also handles webhook messages.
  - logService.py: Handles logging for all services.

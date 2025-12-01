@@ -1,5 +1,5 @@
 ## HSS Parameters
-hss:  
+hss:
   # Transport Type. "TCP" and "SCTP" are valid options.
   # Note: SCTP works but is still experimental. TCP has been load-tested and performs in a production environment.
   transport: "TCP"
@@ -51,14 +51,14 @@ hss:
   CancelLocationRequest_Enabled: False
 
   #Default Sh User Data
-  Default_Sh_UserData: 'default_sh_user_data.xml'
+  Default_Sh_UserData: "default_sh_user_data.xml"
 
   #Whether to use an external socket service
   use_external_socket_service: False
 
   #The Redis key used to store active diameter peers
-  diameter_peer_key: diameterPeers
-  
+  diameter_peer_key: "diameterPeers"
+
   # Send requests via a DRA (if connected) when a given peer can't be found
   use_dra_fallback: False
 
@@ -76,7 +76,7 @@ hss:
 
   #S-CSCF Pool
   scscf_pool:
-    - 'scscf.ims.mnc001.mcc001.3gppnetwork.org'
+    - "scscf.ims.mnc001.mcc001.3gppnetwork.org"
 
   roaming:
     outbound:
@@ -113,12 +113,12 @@ eir:
   #tac_database_csv: '/etc/pyhss/tac_database.csv'
 
 logging:
-  level: DEBUG
+  level: "INFO"
   logfiles:
-    hss_logging_file: /var/log/pyhss_hss.log
-    diameter_logging_file: /var/log/pyhss_diameter.log
-    geored_logging_file: /var/log/pyhss_geored.log
-    metric_logging_file: /var/log/pyhss_metrics.log
+    hss_logging_file: "/tmp/pyhss_hss.log"
+    diameter_logging_file: "/tmp/pyhss_diameter.log"
+    geored_logging_file: "/opt/pyhss/log/pyhss_geored.log"
+    metric_logging_file: "/opt/pyhss/log/pyhss_metrics.log"
   sqlalchemy_sql_echo: False
   sqlalchemy_pool_recycle: 15
   sqlalchemy_pool_size: 30
@@ -126,11 +126,11 @@ logging:
 
 ## Database Parameters
 database:
-  db_type: mysql    #Supported types are MySQL, Postgres and sqlite
-  server: 127.0.0.1
-  username: dbeaver
-  password: password
-  database: hss2 # for sqlite, this should be a path to the database file
+  db_type: "sqlite"    #Supported types are MySQL, Postgres and sqlite
+  server: "localhost"
+  username: "pyhss"
+  password: "changemeinproduction"
+  database: "/tmp/test_hss.db" # for sqlite, this should be a path to the database file
   readCacheEnabled: True
   readCacheInterval: 60
 
@@ -138,21 +138,21 @@ database:
 webhooks:
   enabled: False
   endpoints:
-    - 'http://127.0.0.1:8181'
+    - "http://pyhss-api:8181"
 
 ### Notifications to OCS on Credit Control Requests
 ocs:
   enabled: False
   endpoints:
-    - 'http://127.0.0.1:8282'
+    - "http://127.0.0.1:8282"
 
 ## Geographic Redundancy Parameters
 geored:
   enabled: False
-  sync_actions: ['HSS', 'IMS', 'PCRF', 'EIR']    #What event actions should be synced
+  sync_actions: ["HSS,IMS,PCRF,EIR"]    #What event actions should be synced
   endpoints:                         #List of PyHSS API Endpoints to update
-    - 'http://hss01.mnc001.mcc001.3gppnetwork.org:8080'
-    - 'http://hss02.mnc001.mcc001.3gppnetwork.org:8080'
+    - "http://hss01.mnc001.mcc001.3gppnetwork.org:8080"
+    - "http://hss02.mnc001.mcc001.3gppnetwork.org:8080"
 
 #Redis is required to run PyHSS. An instance running on a local network is recommended for production.
 redis:
@@ -161,18 +161,18 @@ redis:
   # unix - Connect to redis via a unix socket, provided by unixSocketPath.
   # sentinel - Connect to one or more redis sentinel hosts.
   connectionType: "tcp"
-  unixSocketPath: '/var/run/redis/redis-server.sock'
-  host: localhost
+  unixSocketPath: "/var/run/redis/redis-server.sock"
+  host: "redis"
   port: 6379
 
 influxdb:
   enabled: False
   host: "127.0.0.1"
   port: 8086
-  username: exampleUser
-  password: examplePassword
-  database: example
+  username: "exampleUser"
+  password: "examplePassword"
+  database: "example"
 
 snmp:
   port: 1161
-  listen_address: 127.0.0.1
+  listen_address: "127.0.0.1"

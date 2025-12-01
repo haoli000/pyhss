@@ -41,7 +41,7 @@ class HssService:
                 if self.benchmarking:
                     startTime = time.perf_counter()
 
-                inboundMessageList = self.redisMessaging.awaitBulkMessage(key='diameter-inbound', usePrefix=True, prefixHostname=self.hostname, prefixServiceName='diameter')
+                inboundMessageList = self.redisMessaging.awaitBulkMessage(key='diameter-inbound', usePrefix=False)
 
                 if inboundMessageList == None:
                     continue
@@ -114,7 +114,7 @@ class HssService:
                         self.logTool.log(service='HSS', level='debug', message=f"[HSS] [handleQueue] [{diameterMessageTypeOutbound}] Outbound Diameter Queue: {outboundQueue}", redisClient=self.redisMessaging)
                         self.logTool.log(service='HSS', level='debug', message=f"[HSS] [handleQueue] [{diameterMessageTypeOutbound}] Outbound Diameter: {outboundMessage}", redisClient=self.redisMessaging)
 
-                        self.redisMessaging.sendMessage(queue=outboundQueue, message=outboundMessage.model_dump_json(), queueExpiry=60, usePrefix=True, prefixHostname=self.hostname, prefixServiceName='diameter')
+                        self.redisMessaging.sendMessage(queue=outboundQueue, message=outboundMessage.model_dump_json(), queueExpiry=60, usePrefix=False)
                         messageNumber += 1
                         if self.benchmarking:
                             self.logTool.log(service='HSS', level='info', message=f"[HSS] [handleQueue] [{diameterMessageTypeInbound}] Time taken to process request: {round(((time.perf_counter() - startTime)*1000), 3)} ms", redisClient=self.redisMessaging)
